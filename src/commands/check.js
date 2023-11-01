@@ -5,9 +5,7 @@ import {flow, map, partition} from 'lodash/fp';
 import open from 'open';
 import semver from 'semver';
 import detectIndent from 'detect-indent';
-import ncu from 'npm-check-updates';
 import shell from 'shelljs';
-import {colorizeDiff} from 'npm-check-updates/lib/version-util';
 
 import catchAsyncError from '../catchAsyncError';
 import {makeFilterFunction} from '../filterUtils';
@@ -20,6 +18,13 @@ import askUser from '../askUser';
 import {toSentence} from '../stringUtils';
 import {askIgnoreFields} from './ignore';
 import Config from '../Config';
+import getCurrentDependencies from "npm-check-updates/build/src/lib/getCurrentDependencies";
+import queryVersions from "npm-check-updates/build/src/lib/queryVersions";
+import upgradeDependencies from "npm-check-updates/build/src/lib/upgradeDependencies";
+import {chalkInit} from "npm-check-updates/build/src/lib/chalk";
+import {colorizeDiff} from "npm-check-updates/build/src/lib/version-util";
+
+chalkInit()
 
 const pkg = require('../../package.json');
 
@@ -84,9 +89,12 @@ export const handler = catchAsyncError(async opts => {
     .filter(({name}) => opts[name])
     .map(({ncuValue}) => ncuValue)
     .join(',');
-  const currentVersions = ncu.getCurrentDependencies(packageJson, {dep: ncuDepGroups});
-  const latestVersions = await ncu.queryVersions(currentVersions, {versionTarget: 'latest'});
-  let upgradedVersions = ncu.upgradeDependencies(currentVersions, latestVersions);
+  const currentVersions = getCurrentDependencies(packageJson, {dep: ncuDepGroups});
+  const latestVersionResults = await queryVersions(currentVersions, {target: 'latest'});
+  console.log(JSON.stringify(latestVersionResults, null, 2));
+  const latestVersions = {}
+  Object.keys(latestVersionResults).forEach((k) => latestVersions[k] = latestVersionResults[k].version);
+  let upgradedVersions = upgradeDependencies(currentVersions, latestVersions);
 
   // Filtering modules that have to be updated
   upgradedVersions = _.pickBy(
